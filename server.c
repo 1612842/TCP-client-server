@@ -16,6 +16,7 @@ struct Client
     int sock;
     int active;
     int isOver;
+    void* sock_desc;
 } * clientInfo;
 
 int max_clients = 4;
@@ -24,6 +25,13 @@ int *arr;
 int sizeOfArr = 5;
 int posNum = 0;
 pthread_mutex_t lock;
+int numOfFileCalcedSum = 0;
+int isOver =0;
+struct Rank
+{
+    int clientId;
+    int sum;
+}*rankClient;
 
 void *connection_handler(void *);
 
@@ -35,6 +43,7 @@ int main(int argc, char *argv[])
     randomArr(sizeOfArr);
     printArr();
     initializeClientInfo();
+    initializeRankClient();
 
     if (pthread_mutex_init(&lock, NULL) != 0)
     {
@@ -93,6 +102,7 @@ int main(int argc, char *argv[])
             {
                 clientInfo[i].active = 1;
                 clientInfo[i].sock = *(int *)new_sock;
+                clientInfo[i].sock_desc=new_sock;
                 cid = i;
                 break;
             }
@@ -124,8 +134,10 @@ void *connection_handler(void *socket_descriptor)
 
     int idClient = getIdClient(sock);
 
+
     while (1)
     {
+        
         bzero(buff, MAX);
 
         // read the message from client and copy it in buffer
@@ -140,6 +152,8 @@ void *connection_handler(void *socket_descriptor)
 
         if (clientInfo[idClient].isOver == 1)
         {
+            pthread_mutex_lock(&lock);
+
             char filename[MAX];
             sprintf(filename, "server-%d.txt", idClient);
             FILE *f = fopen(filename, "w");
@@ -149,37 +163,72 @@ void *connection_handler(void *socket_descriptor)
             fclose(f);
             char tmp[MAX];
             strcpy(tmp, "server has received file");
-            write(sock, tmp, sizeof(buff));
+            write(sock, tmp, sizeof(tmp));
+
+            pthread_mutex_unlock(&lock);
         }
 
         // print buffer which contains the client contents
         printf("From client: %s", buff);
 
-        if (strcmp(buff, "get\n") == 0)
-        {
-            pthread_mutex_lock(&lock);
-            bzero(buff, MAX);
-            int num;
-            if (posNum == sizeOfArr)
+        
+        if (checkAllFileReceived()==1){
+            calculateSum();
+            rankingAllSum();
+
+            for (int i = 0; i < numOfFileCalcedSum; i++)
             {
-                strcpy(buff, "over");
-                write(sock, buff, sizeof(buff));
+                printf("\n%d: %d \n",rankClient[i].clientId, rankClient[i].sum);
             }
-            else
-            {
-                num = arr[posNum];
-                sprintf(buff, "%d", num);
-                write(sock, buff, sizeof(buff));
-                posNum++;
-            }
-            pthread_mutex_unlock(&lock);
+
+            char content[MAX]="";
+            buildStringOfRank(content);
+            printf("%s\n", content);
+
+            // for(int i = 0; i < max_clients; i++)
+            // {
+            //     if (clientInfo[i].active==1){
+            //         write(clientInfo[i].sock, content, sizeof(content));
+            //     }
+            // }
+            
+            write(sock, content, sizeof(content));
+            printf("all file recv...\n");
+            
+            
         }
 
-        if (strcmp(buff, "post\n") == 0)
+        if (strcmp(buff, "get\n") == 0)
+            {
+                pthread_mutex_lock(&lock);
+
+                bzero(buff, MAX);
+                int num;
+                if (posNum == sizeOfArr)
+                {
+                    isOver=1;
+                    strcpy(buff, "over");
+                    write(sock, buff, sizeof(buff));
+                }
+                else
+                {
+                    num = arr[posNum];
+                    sprintf(buff, "%d", num);
+                    write(sock, buff, sizeof(buff));
+                    posNum++;
+                }
+
+                pthread_mutex_unlock(&lock);
+                
+            }
+
+            
+       if (strcmp(buff, "post\n") == 0)
         {
-            clientInfo[idClient].isOver = 1;
-            printf("post....\n");
+                clientInfo[idClient].isOver = 1;
+                printf("post....\n");
         }
+        
     }
 
     close(sock);
@@ -217,6 +266,15 @@ void initializeClientInfo()
     }
 }
 
+void initializeRankClient(){
+    rankClient = malloc(max_clients * sizeof(struct Rank));
+    for (int i = 0; i < max_clients; i++)
+    {
+        rankClient[i].clientId=0;
+        rankClient[i].sum=0;
+    }
+}
+
 int getIdClient(int sock)
 {
     for (int i = 0; i < max_clients; i++)
@@ -227,4 +285,85 @@ int getIdClient(int sock)
         }
     }
     return 0;
+}
+
+int checkAllFileReceived(){
+    int numOver=0, numActive=0;
+    for (int i = 0; i < max_clients; i++)
+    {
+        if (clientInfo[i].isOver==1)
+            numOver++;
+        if (clientInfo[i].active==1)
+            numActive++;
+    }
+
+    if (numOver==numActive)
+        return 1;
+    else
+    {
+        return 0;
+    }
+}
+
+
+
+void calculateSum(){
+    FILE* f;
+    char filename[MAX];
+    
+    for (int i = 0; i < max_clients; i++)
+    {
+        if (clientInfo[i].active==1){
+            
+            sprintf(filename, "server-%d.txt", i);
+            f=fopen(filename,"r");
+            
+            int tmp;
+            while (1) {
+                
+                int ret = fscanf(f, "%d", &tmp);
+                if (ret==EOF)
+                    break;
+                rankClient[numOfFileCalcedSum].sum+=tmp;
+            }
+            fclose(f);
+            rankClient[numOfFileCalcedSum].clientId=i;
+            numOfFileCalcedSum++;
+        }
+    }
+    
+    for (int i = 0; i < numOfFileCalcedSum; i++)
+    {
+        printf("\n%d:- %d \n----",rankClient[i].clientId, rankClient[i].sum);
+    }
+    
+}
+
+
+void rankingAllSum(){
+    for(int i = 0; i < numOfFileCalcedSum-1; i++)
+    {
+        for (int j = i+1; j < numOfFileCalcedSum; j++)
+        {
+            if (rankClient[i].sum<rankClient[j].sum){
+                struct Rank temp= rankClient[i];
+                rankClient[i]=rankClient[j];
+                rankClient[j]=temp;
+            }
+        }
+        
+        
+    }
+    
+}
+
+void buildStringOfRank(char* content){
+    
+    for (int i = 0; i < numOfFileCalcedSum; i++)
+    {
+        char tmp[MAX];
+        sprintf(tmp, "Rank: %d - Client: %d - Sum: %d\n",i+1, rankClient[i].clientId,rankClient[i].sum);
+        strcat(content,tmp);
+    }
+
 }

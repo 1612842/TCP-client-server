@@ -10,6 +10,7 @@
 int *arr;
 int sizeOfArr = 0;
 int isOver = 0;
+int isFull=0;
 FILE *f;
 
 void chat(int sockfd)
@@ -24,36 +25,44 @@ void chat(int sockfd)
         bzero(buff, sizeof(buff));
         read(sockfd, buff, sizeof(buff));
 
+
         if (tmp == 0)
             id = atoi(buff);
         else
         {
-            printf("Server reponse: %s\n", buff);
-            if (strcmp(buff, "over") != 0)
-            {
-                writeToFile(id, buff);
-            }
-            else
-            {
-                isOver = 1;
+                printf("Server reponse: %s\n", buff);
+                
                 char filename[MAX];
-                sprintf(filename, "client-%d.txt", id);
-                if (sizeOfArr == 0)
-                    f = fopen(filename, "w");
+                sprintf(filename, "result-%d.txt", id);    
+                FILE* fres = fopen(filename, "w");
+                fprintf(fres,"%s",buff);
+                fclose(fres);
+
+                if (strcmp(buff, "over") != 0)
+                {
+                    writeToFile(id, buff);
+                }
                 else
-                    f = fopen(filename, "r");
+                {
+                    isOver = 1;
+                    char filename[MAX];
+                    sprintf(filename, "client-%d.txt", id);
+                    if (sizeOfArr == 0)
+                        f = fopen(filename, "w");
+                    else
+                        f = fopen(filename, "r");
 
-                fseek(f, 0L, SEEK_END);
-                // calculating the size of the file
-                int count = ftell(f);
-                fclose(f);
+                    fseek(f, 0L, SEEK_END);
+                    // calculating the size of the file
+                    int count = ftell(f);
+                    fclose(f);
 
-                bzero(buff, sizeof(buff));
-                strcpy(buff, "post\n");
-                write(sockfd, buff, sizeof(buff));
+                    bzero(buff, sizeof(buff));
+                    strcpy(buff, "post\n");
+                    write(sockfd, buff, sizeof(buff));
 
-                printf("send file: %d bytes\n", count);
-            }
+                    printf("send file: %d bytes\n", count);
+                }
         }
         tmp = 1;
 
@@ -64,11 +73,14 @@ void chat(int sockfd)
             printf("%s\n", content);
 
             write(sockfd, content, sizeof(content));
-           
-            isOver = 0;
+
+            isOver=0;
+            isFull=1;
+
         }
         else
         {
+
             bzero(buff, sizeof(buff));
             printf("Client %d: ", id);
             n = 0;
@@ -129,13 +141,15 @@ void writeToFile(int id, char *buff)
     sprintf(filename, "client-%d.txt", id);
     f = fopen(filename, "w");
 
-    int num = atoi(buff);
-    sizeOfArr++;
-    arr = (int *)realloc(arr, sizeOfArr);
-    arr[sizeOfArr - 1] = num;
+    if (isFull==0){
+        int num = atoi(buff);
+        sizeOfArr++;
+        arr = (int *)realloc(arr, sizeOfArr);
+        arr[sizeOfArr - 1] = num;
 
-    sort(arr, sizeOfArr);
-    printArr(arr, sizeOfArr, f);
+        sort(arr, sizeOfArr);
+        printArr(arr, sizeOfArr, f);
+    }
 
     fclose(f);
 }
