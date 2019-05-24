@@ -16,7 +16,6 @@ struct Client
     int sock;
     int active;
     int isOver;
-    void* sock_desc;
 } * clientInfo;
 
 int max_clients = 4;
@@ -102,7 +101,6 @@ int main(int argc, char *argv[])
             {
                 clientInfo[i].active = 1;
                 clientInfo[i].sock = *(int *)new_sock;
-                clientInfo[i].sock_desc=new_sock;
                 cid = i;
                 break;
             }
@@ -163,7 +161,7 @@ void *connection_handler(void *socket_descriptor)
             fclose(f);
             char tmp[MAX];
             strcpy(tmp, "server has received file");
-            write(sock, tmp, sizeof(tmp));
+            write(sock, tmp, sizeof(buff));
 
             pthread_mutex_unlock(&lock);
         }
@@ -185,12 +183,6 @@ void *connection_handler(void *socket_descriptor)
             buildStringOfRank(content);
             printf("%s\n", content);
 
-            // for(int i = 0; i < max_clients; i++)
-            // {
-            //     if (clientInfo[i].active==1){
-            //         write(clientInfo[i].sock, content, sizeof(content));
-            //     }
-            // }
             
             write(sock, content, sizeof(content));
             printf("all file recv...\n");

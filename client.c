@@ -80,6 +80,7 @@ void chat(int sockfd)
         }
         else
         {
+            if (isFull) continue;
 
             bzero(buff, sizeof(buff));
             printf("Client %d: ", id);
